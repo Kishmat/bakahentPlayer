@@ -1,12 +1,11 @@
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI
 from fastapi.responses import PlainTextResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 import httpx
-from urllib.parse import urljoin
+from urllib.parse import urljoin, quote
 
 app = FastAPI()
 
-# CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -15,6 +14,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+PROXY_BASE = "https://accurate-marylee-kishmat-e1cb1721.koyeb.app"  # <-- Replace this before deploy
+
 @app.get("/m3u8")
 async def proxy_m3u8(url: str):
     async with httpx.AsyncClient() as client:
@@ -22,10 +23,14 @@ async def proxy_m3u8(url: str):
         content = r.text
 
         def rewrite_line(line):
-            if line.strip().startswith("#") or not line.strip():
+            line = line.strip()
+            if not line or line.startswith("#"):
                 return line
-            full_url = urljoin(url, line.strip())
-            return f"/segment?url={full_url}"
+            full_url = urljoin(url, line)
+            if ".m3u8" in line:
+                return f"{PROXY_BASE}/m3u8?url={quote(full_url)}"
+            else:
+                return f"{PROXY_BASE}/segment?url={quote(full_url)}"
 
         rewritten = "\n".join(rewrite_line(line) for line in content.splitlines())
         return PlainTextResponse(rewritten, media_type="application/vnd.apple.mpegurl")
